@@ -1,0 +1,20 @@
+# permissions for end users to view orgs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: org-viewer-role
+rules:
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - orgs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - orgs/status
+  verbs:
+  - get

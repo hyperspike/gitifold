@@ -1,0 +1,16 @@
+domain: hyperspike.io
+repo: hyperspike.io/eng/gitifold
+resources:
+- group: gitifold
+  kind: VCS
+  version: v1beta1
+- group: gitifold
+  kind: User
+  version: v1beta1
+- group: gitifold
+  kind: Pipeline
+  version: v1beta1
+- group: gitifold
+  kind: Org
+  version: v1beta1
+version: "2"

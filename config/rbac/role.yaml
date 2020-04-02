@@ -1,0 +1,112 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  - apps
+  - networking.k8s.io
+  - rbac.authorization.k8s.io
+  resources:
+  - configmaps
+  - deployments
+  - ingresses
+  - persistentvolumeclaims
+  - rolebindings
+  - roles
+  - secrets
+  - serviceaccounts
+  - services
+  - statefulesets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - orgs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - orgs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - pipelines
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - pipelines/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - users
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - users/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - vcs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - vcs/status
+  verbs:
+  - get
+  - patch
+  - update

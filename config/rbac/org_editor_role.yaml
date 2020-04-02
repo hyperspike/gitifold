@@ -1,0 +1,24 @@
+# permissions for end users to edit orgs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: org-editor-role
+rules:
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - orgs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - orgs/status
+  verbs:
+  - get

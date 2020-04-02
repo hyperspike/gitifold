@@ -1,0 +1,24 @@
+# permissions for end users to edit vcs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vcs-editor-role
+rules:
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - vcs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - vcs/status
+  verbs:
+  - get

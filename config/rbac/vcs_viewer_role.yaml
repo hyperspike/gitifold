@@ -1,0 +1,20 @@
+# permissions for end users to view vcs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vcs-viewer-role
+rules:
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - vcs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gitifold.hyperspike.io
+  resources:
+  - vcs/status
+  verbs:
+  - get

@@ -1,0 +1,7 @@
+apiVersion: gitifold.hyperspike.io/v1beta1
+kind: Org
+metadata:
+  name: org-sample
+spec:
+  # Add fields here
+  foo: bar

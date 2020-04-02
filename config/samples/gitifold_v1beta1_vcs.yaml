@@ -1,0 +1,10 @@
+apiVersion: gitifold.hyperspike.io/v1beta1
+kind: VCS
+metadata:
+  name: vcs-sample
+spec:
+  # Add fields here
+  git:
+    hostname: foo.bar
+  ci:
+    hostname: bar.foo
