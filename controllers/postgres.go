@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"math/big"
 	"strings"
 
@@ -167,6 +168,24 @@ func newPgServiceHeadlessCr(component string, cr *gitifold.VCS) *corev1.Service 
 				},
 			},
 		},
+	}
+}
+func GenerateRandomBase64String(length int) (string, error) {
+	result := ""
+	for {
+		if len(result) >= length {
+			return base64.URLEncoding.EncodeToString([]byte(result)), nil
+		}
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(127)))
+		if err != nil {
+			return "", err
+		}
+		n := num.Int64()
+		// Make sure that the number/byte/letter is inside
+		// the range of printable ASCII characters (excluding space and DEL)
+		if (n >= 48 && n <= 57) || (n >= 65 && n <= 90) || (n >= 97 && n <= 122) {
+			result += string(n)
+		}
 	}
 }
 func GenerateRandomASCIIString(length int) (string, error) {

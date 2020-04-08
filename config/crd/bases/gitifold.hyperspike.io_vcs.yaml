@@ -34,21 +34,47 @@ spec:
         spec:
           description: VCSSpec defines the desired state of VCS
           properties:
+            annotations:
+              additionalProperties:
+                type: string
+              type: object
             ci:
               properties:
                 annotations:
                   additionalProperties:
                     type: string
+                  description: 'Ingress annotations, IE: for certs and dns'
+                  type: object
+                hostname:
+                  description: The External Hostname to use for Ingress
+                  type: string
+                system:
+                  description: 'The the CI System you wish to use options are drone
+                    and agola, default: drone'
+                  enum:
+                  - drone
+                  - agola
+                  type: string
+              type: object
+            clair:
+              properties:
+                annotations:
+                  additionalProperties:
+                    type: string
+                  description: 'Ingress annotations, IE: for certs and dns'
                   type: object
                 hostname:
                   description: The External Hostname to use for Ingress
                   type: string
               type: object
+            domain:
+              type: string
             git:
               properties:
                 annotations:
                   additionalProperties:
                     type: string
+                  description: 'Ingress annotations, IE: for certs and dns'
                   type: object
                 hostname:
                   description: The External Hostname to use for Ingress
@@ -59,6 +85,7 @@ spec:
                 annotations:
                   additionalProperties:
                     type: string
+                  description: 'Ingress annotations, IE: for certs and dns'
                   type: object
                 hostname:
                   description: The External Hostname to use for Ingress

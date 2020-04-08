@@ -12,6 +12,8 @@ import (
 	"text/template"
 	"time"
 
+	erro "errors"
+
 	"github.com/dgrijalva/jwt-go"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -21,12 +23,47 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1beta1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
+
+func fetchGiteaToken(cr *gitifold.VCS, r *VCSReconciler) (string, error) {
+	logger := r.Log.WithValues("Request.Namespace", cr.Namespace, "Request.Name", cr.Name)
+
+	giteaSecret := &corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Secret",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      strings.Join([]string{cr.Name, "gitifold", "gitea", "admin"}, "-"),
+			Namespace: cr.Namespace,
+		},
+	}
+	found := &corev1.Secret{}
+
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: giteaSecret.Name, Namespace: giteaSecret.Namespace}, found)
+	if err != nil {
+		logger.Info("error fetching gitea token ", err)
+		return "", err
+	}
+
+	if _, ok := found.Data["token"]; !ok {
+		logger.Info("gitea secret missing token key")
+		return "", erro.New("token missing: secret token missing from secret map")
+	}
+
+	token, err := base64.URLEncoding.DecodeString(string(found.Data["token"]))
+	if err != nil {
+		logger.Info("failed to decode token ", err)
+		return "", err
+	}
+	return string(token), nil
+}
 
 func createGiteaService(dbSecret *DBSecret, cr *gitifold.VCS, r *VCSReconciler) error {
 	logger := r.Log.WithValues("Request.Namespace", cr.Namespace, "Request.Name", cr.Name)
@@ -96,6 +133,54 @@ func createGiteaService(dbSecret *DBSecret, cr *gitifold.VCS, r *VCSReconciler) 
 		}
 	} else {
 		logger.Info("Skip reconcile: Gitea Ingress already exists")
+	}
+
+	sa := newGiteaServiceAccountCr(cr)
+	if err := controllerutil.SetControllerReference(cr, sa, r.Scheme); err != nil {
+		return err
+	}
+	foundSA := &corev1.ServiceAccount{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: sa.Name, Namespace: sa.Namespace}, foundSA)
+	if err != nil && errors.IsNotFound(err) {
+		logger.Info("Creating a new Gitea ServiceAccount")
+		err = r.Client.Create(context.TODO(), sa)
+		if err != nil {
+			return err
+		}
+	} else {
+		logger.Info("Skip reconcile: Gitea ServiceAccount already exists")
+	}
+
+	role := newGiteaRoleCr(cr)
+	if err := controllerutil.SetControllerReference(cr, role, r.Scheme); err != nil {
+		return err
+	}
+	foundRole := &rbacv1.Role{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: role.Name, Namespace: role.Namespace}, foundRole)
+	if err != nil && errors.IsNotFound(err) {
+		logger.Info("Creating a new Gitea Role")
+		err = r.Client.Create(context.TODO(), role)
+		if err != nil {
+			return err
+		}
+	} else {
+		logger.Info("Skip reconcile: Gitea Role already exists")
+	}
+
+	roleBinding := newGiteaRoleBindingCr(cr)
+	if err := controllerutil.SetControllerReference(cr, roleBinding, r.Scheme); err != nil {
+		return err
+	}
+	foundRB := &rbacv1.RoleBinding{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: roleBinding.Name, Namespace: roleBinding.Namespace}, foundRB)
+	if err != nil && errors.IsNotFound(err) {
+		logger.Info("Creating a new Gitea Rolebinding")
+		err = r.Client.Create(context.TODO(), roleBinding)
+		if err != nil {
+			return err
+		}
+	} else {
+		logger.Info("Skip reconcile: Gitea RoleBinding already exists")
 	}
 
 	dep := newGiteaDeploymentCr(cr)
@@ -295,6 +380,18 @@ ENABLED = true
 ENABLE_OPENID_SIGNIN = true
 ENABLE_OPENID_SIGNUP = true`)
 
+	cmd := `#!/bin/sh
+
+name=$1
+
+curl -f -H "Authorization: Bearer $(cat /run/secrets/kubernetes.io/serviceaccount/token)" --cacert /run/secrets/kubernetes.io/serviceaccount/ca.crt https://kubernetes.default.svc.cluster.local/api/v1/namespaces/$(cat /run/secrets/kubernetes.io/serviceaccount/namespace)secrets/$name
+if [ "$?" -ne "0" ] ; then
+	TOKEN=$(su git -c 'gitea admin create-user --email gitea@hyperspike.io --username gitifold --admin --random-password --access-token' | awk '$0 ~ /Access token/ { print $NF }')
+	curl -f -H "Authorization: Bearer $(cat /run/secrets/kubernetes.io/serviceaccount/token)" --cacert /run/secrets/kubernetes.io/serviceaccount/ca.crt https://kubernetes.default.svc.cluster.local/api/v1/namespaces/$(cat /run/secrets/kubernetes.io/serviceaccount/namespace)secrets/$name \
+	-d "{\"kind\": \"Secret\", \"apiVersion\": \"v1\", \"metadata\": { \"name\": \"${name }\"}, \"data\": { \"token\": \"$(echo ${TOKEN} | base64 -w 0 )\" },  \"type\": \"Opaque\" }"
+fi
+`
+
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +411,7 @@ ENABLE_OPENID_SIGNUP = true`)
 		},
 		Data: map[string][]byte{
 			"app.ini": str.Bytes(),
+			"cmd":     []byte(cmd),
 		},
 	}, nil
 }
@@ -422,7 +520,7 @@ func newGiteaPVCCr(cr *gitifold.VCS) *corev1.PersistentVolumeClaim {
 		"deployment": "gitifold",
 		"instance":   cr.Name,
 	}
-	name := strings.Join([]string{cr.Name, "-gitifold-gitea"}, "")
+	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
 
 	size, _ := resource.ParseQuantity("5Gi")
 	/*if cr.Spec.Git.Storage.StorageSize != "" {
@@ -456,6 +554,103 @@ func newGiteaPVCCr(cr *gitifold.VCS) *corev1.PersistentVolumeClaim {
 		}
 	*/
 	return ret
+}
+
+func newGiteaServiceAccountCr(cr *gitifold.VCS) *corev1.ServiceAccount {
+	labels := map[string]string{
+		"app":        "gitea",
+		"component":  "vcs",
+		"deployment": "gitifold",
+		"instance":   cr.Name,
+	}
+	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+
+	return &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "ServiceAccount",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cr.Namespace,
+			Annotations: make(map[string]string),
+			Labels:      labels,
+		},
+	}
+}
+
+func newGiteaRoleCr(cr *gitifold.VCS) *rbacv1.Role {
+	labels := map[string]string{
+		"app":        "gitea",
+		"component":  "vcs",
+		"deployment": "gitifold",
+		"instance":   cr.Name,
+	}
+	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+
+	return &rbacv1.Role{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Role",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cr.Namespace,
+			Annotations: make(map[string]string),
+			Labels:      labels,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{
+					"",
+				},
+				Resources: []string{
+					"secrets",
+				},
+				Verbs: []string{
+					"create",
+					"delete",
+					"update",
+					"get",
+				},
+			},
+		},
+	}
+}
+
+func newGiteaRoleBindingCr(cr *gitifold.VCS) *rbacv1.RoleBinding {
+	labels := map[string]string{
+		"app":        "gitea",
+		"component":  "vcs",
+		"deployment": "gitifold",
+		"instance":   cr.Name,
+	}
+	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+
+	return &rbacv1.RoleBinding{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "RoleBinding",
+			APIVersion: "rbac.authorization.k8s.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Namespace:   cr.Namespace,
+			Annotations: make(map[string]string),
+			Labels:      labels,
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     name,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      name,
+				Namespace: cr.Namespace,
+			},
+		},
+	}
 }
 
 func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
@@ -494,6 +689,7 @@ func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					ServiceAccountName: name,
 					Volumes: []corev1.Volume{
 						{
 							Name: "git",
@@ -513,6 +709,10 @@ func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
 											Key:  "app.ini",
 											Path: "app.ini",
 										},
+										{
+											Key:  "cmd",
+											Path: "cmd",
+										},
 									},
 								},
 							},
@@ -521,7 +721,7 @@ func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
 					Containers: []corev1.Container{
 						{
 							Name:  "gitea",
-							Image: "gitea/gitea:1.11.3",
+							Image: "gitea/gitea:1.11.4",
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "git",
@@ -531,6 +731,11 @@ func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
 									Name:      "config",
 									MountPath: "/data/gitea/conf/app.ini",
 									SubPath:   "app.ini",
+								},
+								{
+									Name:      "config",
+									MountPath: "/usr/local/bin/admin-add",
+									SubPath:   "cmd",
 								},
 							},
 							Ports: []corev1.ContainerPort{
@@ -543,6 +748,19 @@ func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
 									ContainerPort: 22,
 									Name:          "ssh",
 									Protocol:      "TCP",
+								},
+							},
+							Lifecycle: &corev1.Lifecycle{
+								PostStart: &corev1.Handler{
+									Exec: &corev1.ExecAction{
+										Command: []string{
+											"/bin/sh",
+											"-c",
+											"cp /tmp/admin-add /usr/local/bin/admin-add",
+											"chmod +x /usr/local/bin/admin-add",
+											strings.Join([]string{"/usr/local/bin/admin-add ", cr.Name, "-gitifold-gitea-admin"}, ""),
+										},
+									},
 								},
 							},
 							LivenessProbe: &corev1.Probe{

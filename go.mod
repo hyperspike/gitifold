@@ -3,8 +3,8 @@ module hyperspike.io/eng/gitifold
 go 1.13
 
 require (
+	code.gitea.io/sdk/gitea v0.11.1-0.20200407142605-2f920dbb01a5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
-	github.com/dmolik/gitifold v0.0.0-20190704143942-f15e98c1d381
 	github.com/go-logr/logr v0.1.0
 	github.com/onsi/ginkgo v1.11.0
 	github.com/onsi/gomega v1.8.1

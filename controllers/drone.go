@@ -13,6 +13,8 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"code.gitea.io/sdk/gitea"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -31,7 +33,7 @@ func droneLabelNames(component string, cr *gitifold.VCS) (string, map[string]str
 	return name, labels
 }
 
-func createDroneService(cr *gitifold.VCS, r *VCSReconciler) error {
+func createDroneService(oauthApp *gitea.Oauth2, cr *gitifold.VCS, r *VCSReconciler) error {
 	logger := r.Log.WithValues("Request.Namespace", cr.Namespace, "Request.Name", cr.Name)
 
 	droneService := newDroneServiceCr(cr)
@@ -66,7 +68,7 @@ func createDroneService(cr *gitifold.VCS, r *VCSReconciler) error {
 		logger.Info("Skip reconcile: Drone Ingress already exists")
 	}
 
-	droneSecret := newDroneSecretCr(cr)
+	droneSecret := newDroneSecretCr(oauthApp, cr)
 	if err = controllerutil.SetControllerReference(cr, droneSecret, r.Scheme); err != nil {
 		return err
 	}
@@ -259,7 +261,7 @@ func newDroneIngressCr(cr *gitifold.VCS) *netv1.Ingress {
 	}
 }
 
-func newDroneSecretCr(cr *gitifold.VCS) *corev1.Secret {
+func newDroneSecretCr(oauthApp *gitea.Oauth2, cr *gitifold.VCS) *corev1.Secret {
 	name, labels := droneLabelNames("app", cr)
 	secret, _ := GenerateRandomASCIIString(16)
 	return &corev1.Secret{
@@ -275,15 +277,15 @@ func newDroneSecretCr(cr *gitifold.VCS) *corev1.Secret {
 		},
 		Data: map[string][]byte{
 			"DRONE_DATABASE_DRIVER":     []byte("postgres"),
-			"DRONE_GITEA_CLIENT_ID":     []byte("67173af0-e39f-47d2-8052-310d2adfe065"),
-			"DRONE_GITEA_CLIENT_SECRET": []byte("YsCXTr70hXWksg4Ijx-X2wxs5RRQ-kLnQv4CYHoN-Y0="),
+			"DRONE_GITEA_CLIENT_ID":     []byte(oauthApp.ClientID),
+			"DRONE_GITEA_CLIENT_SECRET": []byte(oauthApp.ClientSecret),
 			"DRONE_GITEA_SERVER":        []byte(strings.Join([]string{"https://", cr.Spec.Git.Hostname}, "")),
 			"DRONE_RPC_SECRET":          []byte(secret),
 			"DRONE_SERVER_HOST":         []byte(cr.Spec.CI.Hostname),
 			"DRONE_SERVER_PROTO":        []byte("https"),
-			// "DRONE_USER_CREATE": "username:dan,machine:false,admin:true"
-			"DRONE_RPC_HOST":   []byte(strings.Join([]string{name, ":80"}, "")),
-			"DRONE_LOGS_DEBUG": []byte("true"),
+			"DRONE_USER_CREATE":         []byte("username:gitea,machine:false,admin:true"),
+			"DRONE_RPC_HOST":            []byte(strings.Join([]string{name, ":80"}, "")),
+			"DRONE_LOGS_DEBUG":          []byte("true"),
 		},
 	}
 }

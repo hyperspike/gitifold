@@ -42,7 +42,7 @@ deploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	sed -i '' -e "s/newTag:.*/newTag:\ $(VERSION)/" config/manager/kustomization.yaml
+	sed -i "s/newTag:.*/newTag:\ $(VERSION)/" config/manager/kustomization.yaml
 
 # Run go fmt against code
 fmt:
@@ -59,7 +59,7 @@ generate: controller-gen
 container: docker-build docker-push
 
 # Build the docker image
-docker-build: test
+docker-build: # test
 	docker build . -t ${IMG}
 
 # Push the docker image

@@ -18,12 +18,15 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"code.gitea.io/sdk/gitea"
 
 	gitifold "hyperspike.io/eng/gitifold/api/v1beta1"
 )
@@ -43,7 +46,7 @@ type VCSReconciler struct {
 
 func (r *VCSReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
-	logger := r.Log.WithValues("pipeline", req.NamespacedName)
+	logger := r.Log.WithValues("VCS", req.NamespacedName)
 	logger.Info("reconciling")
 
 	instance := &gitifold.VCS{}
@@ -66,13 +69,40 @@ func (r *VCSReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err = createGiteaService(dbSecret, instance, r); err != nil {
 		return ctrl.Result{}, err
 	}
+	token, err := fetchGiteaToken(instance, r)
+	if err != nil {
+		logger.Info("Gitea Token not ready")
+		return ctrl.Result{}, err
+	}
 
+	gitClient := gitea.NewClient(strings.Join([]string{instance.Name, "gitifold", "gitea"}, "-"), token)
+	oauthApp, err := gitClient.CreateOauth2(gitea.CreateOauth2Option{
+		Name: "Drone",
+		RedirectURIs: []string{
+			strings.Join([]string{"https://", instance.Spec.CI.Hostname, "/login"}, ""),
+		},
+	})
+	if err != nil {
+		logger.Error(err, "failed to create drone oauth in gitea")
+		return ctrl.Result{}, err
+	}
+	// Ci Components
 	if _, err = createPgService("drone", instance, r); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err = createDroneService(instance, r); err != nil {
+	if err = createDroneService(oauthApp, instance, r); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	// Clair Components
+	dbSecret, err = createPgService("clair", instance, r)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err = createClairService(dbSecret, instance, r); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err = createRegistryService(instance, r); err != nil {
 		return ctrl.Result{}, err
 	}

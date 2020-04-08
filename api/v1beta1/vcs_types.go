@@ -22,19 +22,33 @@ import (
 
 type GitSpec struct {
 	// The External Hostname to use for Ingress
-	Hostname    string            `json:"hostname,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	// Ingress annotations, IE: for certs and dns
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 type CISpec struct {
 	// The External Hostname to use for Ingress
-	Hostname    string            `json:"hostname,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	// Ingress annotations, IE: for certs and dns
 	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// The the CI System you wish to use options are drone and agola, default: drone
+	// +kubebuilder:validation:Enum=drone;agola
+	System string `json:"system,omitempty"`
 }
 
 type RegistrySpec struct {
 	// The External Hostname to use for Ingress
-	Hostname    string            `json:"hostname,omitempty"`
+	Hostname string `json:"hostname,omitempty"`
+	// Ingress annotations, IE: for certs and dns
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+type ClairSpec struct {
+	// The External Hostname to use for Ingress
+	Hostname string `json:"hostname,omitempty"`
+	// Ingress annotations, IE: for certs and dns
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
@@ -46,11 +60,16 @@ type VCSSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
+	Domain      string            `json:"domain,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+
 	Git GitSpec `json:"git,omitempty"`
 
 	CI CISpec `json:"ci,omitempty"`
 
 	Registry RegistrySpec `json:"registry,omitempty"`
+
+	Clair ClairSpec `json:"clair,omitempty"`
 }
 
 // VCSStatus defines the observed state of VCS
