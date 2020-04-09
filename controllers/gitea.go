@@ -30,7 +30,17 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
+func giteaLabels(cr *gitifold.VCS) (string, map[string]string {
+	labels := map[string]string{
+		"app":        "gitea",
+		"component":  "vcs",
+		"deployment": "gitifold",
+		"instance":   cr.Name,
+	}
+	name := strings.Join([]string{cr.Name, "-gitifold-gitea"}, "")
 
+	return name, labels
+}
 func fetchGiteaToken(cr *gitifold.VCS, r *VCSReconciler) (string, error) {
 	logger := r.Log.WithValues("Request.Namespace", cr.Namespace, "Request.Name", cr.Name)
 
@@ -253,14 +263,8 @@ func genJWTSecret() string {
 }
 
 func newGiteaSecret(dbSecret *DBSecret, cr *gitifold.VCS) (*corev1.Secret, error) {
+	name, labels := giteaLabels(cr)
 	config := template.New("config")
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "-gitifold-gitea"}, "")
 
 	secretBytes := make([]byte, 32)
 	_, err := io.ReadFull(rand.Reader, secretBytes)
@@ -417,13 +421,7 @@ fi
 }
 
 func newGiteaServiceCr(cr *gitifold.VCS) *corev1.Service {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "-gitifold-gitea"}, "")
+	name, labels := giteaLabels(cr)
 
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -458,13 +456,7 @@ func newGiteaServiceCr(cr *gitifold.VCS) *corev1.Service {
 }
 
 func newGiteaIngressCr(cr *gitifold.VCS) *netv1.Ingress {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "-gitifold-gitea"}, "")
+	name, labels := giteaLabels(cr)
 
 	annotations := make(map[string]string)
 	for key, value := range cr.Spec.Git.Annotations {
@@ -514,13 +506,7 @@ func newGiteaIngressCr(cr *gitifold.VCS) *netv1.Ingress {
 }
 
 func newGiteaPVCCr(cr *gitifold.VCS) *corev1.PersistentVolumeClaim {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+	name, labels := giteaLabels(cr)
 
 	size, _ := resource.ParseQuantity("5Gi")
 	/*if cr.Spec.Git.Storage.StorageSize != "" {
@@ -557,13 +543,7 @@ func newGiteaPVCCr(cr *gitifold.VCS) *corev1.PersistentVolumeClaim {
 }
 
 func newGiteaServiceAccountCr(cr *gitifold.VCS) *corev1.ServiceAccount {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+	name, labels := giteaLabels(cr)
 
 	return &corev1.ServiceAccount{
 		TypeMeta: metav1.TypeMeta{
@@ -580,13 +560,7 @@ func newGiteaServiceAccountCr(cr *gitifold.VCS) *corev1.ServiceAccount {
 }
 
 func newGiteaRoleCr(cr *gitifold.VCS) *rbacv1.Role {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+	name, labels := giteaLabels(cr)
 
 	return &rbacv1.Role{
 		TypeMeta: metav1.TypeMeta{
@@ -619,13 +593,7 @@ func newGiteaRoleCr(cr *gitifold.VCS) *rbacv1.Role {
 }
 
 func newGiteaRoleBindingCr(cr *gitifold.VCS) *rbacv1.RoleBinding {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "gitifold", "gitea"}, "-")
+	name, labels := giteaLabels(cr)
 
 	return &rbacv1.RoleBinding{
 		TypeMeta: metav1.TypeMeta{
@@ -654,13 +622,7 @@ func newGiteaRoleBindingCr(cr *gitifold.VCS) *rbacv1.RoleBinding {
 }
 
 func newGiteaDeploymentCr(cr *gitifold.VCS) *appsv1.Deployment {
-	labels := map[string]string{
-		"app":        "gitea",
-		"component":  "vcs",
-		"deployment": "gitifold",
-		"instance":   cr.Name,
-	}
-	name := strings.Join([]string{cr.Name, "-gitifold-gitea"}, "")
+	name, labels := giteaLabels(cr)
 
 	limitCpu, _ := resource.ParseQuantity("250m")
 	limitMemory, _ := resource.ParseQuantity("250Mi")
